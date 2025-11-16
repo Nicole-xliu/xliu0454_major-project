@@ -20,20 +20,25 @@ The inspiration for my city-night animation comes from several visual references
 ## Technical Explanation
 
 **1. Time-based Animation**
+
 This functional prototype relies entirely on the time variable t = (millis() - startTime) / 1000 to drive the animation process. millis() is the official timing function provided by p5.js, which returns the number of milliseconds since the program started. I use it as the global timeline to control all animations, such as maintaining the static daytime scene for 3 seconds, fading in the black screen over 12 seconds, completing the road reveal in 5 seconds, continuously moving the car lights, and allowing large color blocks to appear randomly within the following 10 seconds and automatically change colors every 5 seconds. As a result, the entire work forms a continuous “day → dusk → night” narrative, completely independent of external input, fully realizing the essential characteristics of time-based animation.
 
 **Reference code:**  
 [Link Text]（https://p5js.org/reference/#/p5/millis）
 
 **2. renderScene(t): Time-based State Machine**
+
 renderScene(t) is the core rendering scheduler of the entire project. It switches scene states according to the time t, forming a “time-based state machine.” When t is less than showDelay, the daytime scene is maintained. After that, during fadeDuration, it uses the smoothstep formula to softly fade in the black screen. Then, it uses time mapping to reveal the yellow roads row by row. Once the scene has fully entered nighttime, it draws the moving car lights along their paths, large color blocks appear sequentially according to each block’s appearTime, and each block automatically changes color according to the rhythm defined by nextColorChange. This function integrates all individual animations into a coherent narrative and is the central controller of the entire system.
 
 **3. CarLight: Automatic Path Recognition and Movement System**
+
 The car light system is built using JavaScript’s class mechanism. Each car light object reads the road grid roadCells, checks whether connected cells exist in the four directions (up, down, left, right) to automatically determine the road direction, and uses the buildLine() function to recursively expand a complete drivable path. Each car light then updates its position according to a random stepInterval, making the speed of the car flow inconsistent and closer to real traffic behavior. This system refers to common grid path-expansion methods but does not use complex algorithms such as A*. Instead, it uses a lightweight “local expansion” approach based on continuous grid cells, which is well-suited to this project.
 
 **Reference code:**  
 [Link Text]（https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Classes）
+
 [Link Text]（https://www.redblobgames.com/grids/）
 
 **4. Big Blocks Animation: Nighttime Lighting System for Buildings**
+
 The large block animation is an independent feature I developed outside the group code. I added four fields to each block — baseColor, currentColor, appearTime, and nextColorChange — giving each block its own “independent life.” The appearance time of large blocks is designed to be staggered; they appear randomly within 10 seconds after fadeEnd (the moment the scene becomes fully dark). In addition, I implemented a time-loop–based automatic color-changing system: every 5 seconds, each block executes a randomized color change.
