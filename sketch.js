@@ -19,7 +19,7 @@ let currentShadowOffsetY = 0;
 let startTime;  
 let roadCells = [];
 let showDelay = 3; // Hold for 3 seconds during the day 
-let fadeDuration = 10; // The process of turning black
+let fadeDuration = 12; // The process of turning black
 let nightBuildDuration = 5; //Time to draw the road
 // Join the moving vehicle
 let carLights = [];
@@ -228,12 +228,10 @@ function renderScene(t) {
   }
 
  // Headlight movement + drawing (appearing at night)
-  if (t > fadeEnd + 2) {   // ★ fadeEnd 是完全黑的时间点
   for (let car of carLights) {
     car.update();      //Mobile car lamp
     car.draw(artCanvas); // Draw car lights
   }
- }
 }
 
 // Extract road data from the white area.
