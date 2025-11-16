@@ -21,6 +21,95 @@ let roadCells = [];
 let showDelay = 3; // Hold for 3 seconds during the day 
 let fadeDuration = 10; // The process of turning black
 let nightBuildDuration = 5; //Time to draw the road
+// Join the moving vehicle
+let carLights = [];
+const CAR_COLORS = ['#ad372b', '#314294', '#d6d7d2'];
+
+// ⭐ 车灯类（原样保留）
+//------------------------------------------------------------
+class CarLight {
+  constructor(baseCell, allCells) {
+    this.w = baseCell.w;
+    this.h = baseCell.h;
+
+    this.color = random(CAR_COLORS);
+
+    // 车灯方向（横向或纵向）
+    this.dir = this.detectDirection(baseCell, allCells);
+
+    // 在道路列表中生成可移动的路径（道路上的连续格子）
+    this.line = this.buildLine(baseCell, allCells, this.dir);
+    if (!this.line || this.line.length === 0) this.line = [baseCell];
+
+    this.index = this.line.findIndex(c => c === baseCell);
+    if (this.index < 0) this.index = 0;
+
+    this.x = this.line[this.index].x;
+    this.y = this.line[this.index].y;
+
+    this.stepInterval = floor(random(6, 16)); 
+    this.frameCounter = floor(random(0, this.stepInterval));
+  }
+
+  detectDirection(cell, allCells) {
+    let right = allCells.find(c => c.row === cell.row && c.col === cell.col + 1);
+    let left  = allCells.find(c => c.row === cell.row && c.col === cell.col - 1);
+    let up    = allCells.find(c => c.col === cell.col && c.row === cell.row - 1);
+    let down  = allCells.find(c => c.col === cell.col && c.row === cell.row + 1);
+
+    let horizontal = (right || left) ? 1 : 0;
+    let vertical   = (up || down) ? 1 : 0;
+
+    if (horizontal && !vertical) return 0;
+    if (vertical && !horizontal) return 1;
+
+    return random([0, 1]);
+  }
+
+  buildLine(baseCell, allCells, dir) {
+    let line = [baseCell];
+    let cur = baseCell;
+
+    while (true) {
+      let next;
+      if (dir === 0) next = allCells.find(c => c.row === cur.row && c.col === cur.col - 1);
+      else           next = allCells.find(c => c.col === cur.col && c.row === cur.row - 1);
+      if (!next) break;
+      line.unshift(next);
+      cur = next;
+    }
+
+    cur = baseCell;
+    while (true) {
+      let next;
+      if (dir === 0) next = allCells.find(c => c.row === cur.row && c.col === cur.col + 1);
+      else           next = allCells.find(c => c.col === cur.col && c.row === cur.row + 1);
+      if (!next) break;
+      line.push(next);
+      cur = next;
+    }
+
+    return line;
+  }
+
+  update() {
+    if (!this.line || this.line.length === 0) return;
+
+    this.frameCounter++;
+    if (this.frameCounter >= this.stepInterval) {
+      this.frameCounter = 0;
+      this.index = (this.index + 1) % this.line.length;
+    }
+
+    let current = this.line[this.index];
+    this.x = current.x;
+    this.y = current.y;
+  }
+
+  draw(g) {
+    feltifyRect(g, this.x, this.y, this.w, this.h, this.color, 1.2);
+  }
+}
 
 function preload() {
   sourceImage = loadImage('Street.png'); 
@@ -42,6 +131,7 @@ function setup() {
   generateArt();
   extractDayRoadCells(); //Scan the map and save the road locations.
 
+  createCarLights(); // Headlight initialization
   startTime = millis(); 
   ready = true;
   scaleToWindow();// scale to window size
@@ -83,6 +173,7 @@ if (ready) {
 function mousePressed() {
   generateArt();
   extractDayRoadCells();
+  createCarLights();  
   startTime = millis();
 }
 
@@ -135,9 +226,17 @@ function renderScene(t) {
   for (let cell of roadCells) {
     feltifyRect(artCanvas, cell.x, cell.y, cell.w, cell.h, colors.yellow, 1.2);
   }
-}
-// Extract road data from the white area.
 
+ // Headlight movement + drawing (appearing at night)
+  if (t > fadeEnd + 2) {   // ★ fadeEnd 是完全黑的时间点
+  for (let car of carLights) {
+    car.update();      //Mobile car lamp
+    car.draw(artCanvas); // Draw car lights
+  }
+ }
+}
+
+// Extract road data from the white area.
 function extractDayRoadCells() {
 
   roadCells = [];
@@ -179,6 +278,16 @@ function maxRoadRowIndex() {
   let m = 0;
   for (let c of roadCells) if (c.row > m) m = c.row;
   return m;
+}
+
+//Generate car lights (one for every five road grids)
+function createCarLights() {
+  carLights = [];
+  if (roadCells.length === 0) return;
+
+  for (let i = 0; i < roadCells.length; i += 5) {
+    carLights.push(new CarLight(roadCells[i], roadCells));
+  }
 }
 
 // base color like mondrian
