@@ -173,7 +173,8 @@ function draw() {
 
   // display generated art
   if (ready) {
-    let t = (millis() - startTime) / 1000; //Calculate how many seconds have passed since the animation started.
+    let t = (millis() - startTime) / 1000; //Calculate how many seconds have passed since the animation started. https://p5js.org/reference/p5/millis/
+
     renderScene(t);
     image(artCanvas, 656, 152, 600, 600);
   }
@@ -207,7 +208,7 @@ function renderScene(t) {
   if (t < fadeEnd) {
 
     let p = map(t, fadeStart, fadeEnd, 0, 1); //Calculate the transparency of black (from transparent to completely black). 
-    let eased = p * p * (3 - 2 * p); //Make the transition more natural and less abrupt.          
+    let eased = p * p * (3 - 2 * p); //Make the transition more natural and less abrupt.        
     let alpha = eased * 255;                  
 
     // Draw a black rectangle with gradually increasing transparency on the artCanvas.
