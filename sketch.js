@@ -15,6 +15,13 @@ const SHADOW_SMOOTHING = 0.06;
 let currentShadowOffsetX = 0; 
 let currentShadowOffsetY = 0; 
 
+// Animation control parameters （time）
+let startTime;  
+let roadCells = [];
+let showDelay = 3; // Hold for 3 seconds during the day 
+let fadeDuration = 10; // The process of turning black
+let nightBuildDuration = 5; //Time to draw the road
+
 function preload() {
   sourceImage = loadImage('Street.png'); 
   // load image https://p5js.org/reference/p5/preload/
@@ -33,6 +40,9 @@ function setup() {
   
   
   generateArt();
+  extractDayRoadCells(); //Scan the map and save the road locations.
+
+  startTime = millis(); 
   ready = true;
   scaleToWindow();// scale to window size
 }
@@ -62,6 +72,8 @@ drawBackground(currentShadowOffsetX, currentShadowOffsetY);
 
 // display generated art
 if (ready) {
+  let t = (millis() - startTime) / 1000; //Calculate how many seconds have passed since the animation started.
+    renderScene(t);
  image(artCanvas, 656, 152, 600, 600);
  }
  pop();
@@ -70,7 +82,103 @@ if (ready) {
 // Click to regenerate artwork
 function mousePressed() {
   generateArt();
-  
+  extractDayRoadCells();
+  startTime = millis();
+}
+
+// Daytime → Gradually darkening → Gradually revealing yellow roads
+
+
+function renderScene(t) {
+
+  if (t < showDelay) return; // Do nothing for the first 3 seconds (showing daytime footage).
+
+  let fadeStart = showDelay;
+  let fadeEnd = showDelay + fadeDuration;
+  let roadStart = fadeStart + fadeDuration / 2; 
+  let roadEnd = roadStart + nightBuildDuration;
+
+  // The process of turning black
+  if (t < fadeEnd) {
+
+    let p = map(t, fadeStart, fadeEnd, 0, 1); //Calculate the transparency of black (from transparent to completely black). 
+    let eased = p * p * (3 - 2 * p); //Make the transition more natural and less abrupt.          
+    let alpha = eased * 255;                  
+// Draw a black rectangle with gradually increasing transparency on the artCanvas.
+    artCanvas.fill(0, alpha);
+    artCanvas.noStroke();
+    artCanvas.rect(0, 0, artCanvas.width, artCanvas.height);
+
+    // The road appears (it appears midway through the darkness).
+    if (t > roadStart) {
+
+      let rp = map(t, roadStart, roadEnd, 0, 1);
+      rp = constrain(rp, 0, 1);
+// Draw the road line by line (from top to bottom).
+      let maxRow = maxRoadRowIndex(); //Maximum number of lanes on a road (Y direction)
+      let limit = floor(maxRow * rp); //The current number of rows to be drawn
+
+      for (let cell of roadCells) {
+        if (cell.row <= limit) {
+          feltifyRect(artCanvas, cell.x, cell.y, cell.w, cell.h, colors.yellow, 1.2);
+        }
+      }
+    }
+
+    return;
+  }
+
+  // After it goes completely black (the screen remains black).
+  artCanvas.background(0);
+
+  // Yellow roads were paved
+  for (let cell of roadCells) {
+    feltifyRect(artCanvas, cell.x, cell.y, cell.w, cell.h, colors.yellow, 1.2);
+  }
+}
+// Extract road data from the white area.
+
+function extractDayRoadCells() {
+
+  roadCells = [];
+
+  sourceImage.loadPixels();
+  const scaleX = artCanvas.width / sourceImage.width;
+  const scaleY = artCanvas.height / sourceImage.height;
+  const blockSize = UNIT_SIZE * Math.min(scaleX, scaleY);
+
+  let rowIndex = 0;
+
+  for (let y = 0; y < sourceImage.height; y += SAMPLE_STEP, rowIndex++) {
+
+    let colIndex = 0;
+
+    for (let x = 0; x < sourceImage.width; x += SAMPLE_STEP, colIndex++) {
+
+      let idx = (y * sourceImage.width + x) * 4;
+      let r = sourceImage.pixels[idx];
+      let g = sourceImage.pixels[idx + 1];
+      let b = sourceImage.pixels[idx + 2];
+
+      if (r > 240 && g > 240 && b > 240) {
+
+        roadCells.push({
+          x: x * scaleX,
+          y: y * scaleY,
+          w: blockSize,
+          h: blockSize,
+          row: rowIndex,
+          col: colIndex
+        });
+      }
+    }
+  }
+}
+// Calculate the maximum row value of the road
+function maxRoadRowIndex() {
+  let m = 0;
+  for (let c of roadCells) if (c.row > m) m = c.row;
+  return m;
 }
 
 // base color like mondrian
