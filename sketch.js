@@ -20,13 +20,21 @@ let startTime;
 let roadCells = [];
 let showDelay = 3; // Hold for 3 seconds during the day 
 let fadeDuration = 12; // The process of turning black
-let nightBuildDuration = 5; //Time to draw the road
+let nightBuildDuration = 5; // Time to draw the road
+
 // Join the moving vehicle
 let carLights = [];
 const CAR_COLORS = ['#ad372b', '#314294', '#d6d7d2'];
 
-// ⭐ 车灯类（原样保留）
-//------------------------------------------------------------
+
+// About big blocks
+let bigBlocks = []; // Store the information of all the blocks
+const BIGBLOCK_APPEAR_WINDOW = 10; // Large blocks appeared one after another within 10 seconds after the headlights appeared
+const BIGBLOCK_COLOR_CHANGE_INTERVAL = 5; // Change the color every five seconds
+const BIGBLOCK_DELAY_AFTER_CAR = 1;         
+const BIGBLOCK_COLORS = ['#e1c927', '#ad372b', '#314294', '#d6d7d2'];
+
+//cars
 class CarLight {
   constructor(baseCell, allCells) {
     this.w = baseCell.w;
@@ -34,10 +42,10 @@ class CarLight {
 
     this.color = random(CAR_COLORS);
 
-    // 车灯方向（横向或纵向）
+    // Cars direction (horizontal or vertical)
     this.dir = this.detectDirection(baseCell, allCells);
 
-    // 在道路列表中生成可移动的路径（道路上的连续格子）
+    // Generate movable paths (consecutive grids on the road) in the road list
     this.line = this.buildLine(baseCell, allCells, this.dir);
     if (!this.line || this.line.length === 0) this.line = [baseCell];
 
@@ -128,10 +136,13 @@ function setup() {
   artCanvas.pixelDensity(1); // https://p5js.org/reference/p5/loadPixels/ // Get the pixel density.
   
   
-  generateArt();
+  generateArt(); // Daytime version: Large color blocks + small color block roads
   extractDayRoadCells(); //Scan the map and save the road locations.
+  createCarLights(); 
 
-  createCarLights(); // Headlight initialization
+  initBigBlocks(); 
+  setupBigBlocksAnimation(); // Assign "appearance time" and "next color change time" to each large color block
+
   startTime = millis(); 
   ready = true;
   scaleToWindow();// scale to window size
@@ -140,33 +151,33 @@ function setup() {
 
 function draw() {
 
-//resizing and fitting
-background(255);
-let zoom = 1.25;
-let zoomAnchorY = height * 0.75;
-push(); 
-translate(width / 2, zoomAnchorY / 2); 
-scale(zoom); 
-translate(-width / 2, -zoomAnchorY / 2); 
+  // resizing and fitting
+  background(255);
+  let zoom = 1.25;
+  let zoomAnchorY = height * 0.75;
+  push(); 
+  translate(width / 2, zoomAnchorY / 2); 
+  scale(zoom); 
+  translate(-width / 2, -zoomAnchorY / 2); 
 
-// calculate mouse position 
-let targetOffsetX = map(mouseX, 0, width, -SHADOW_MAX_OFFSET, SHADOW_MAX_OFFSET); 
-let targetOffsetY = map(mouseY, 0, height, -SHADOW_MAX_OFFSET, SHADOW_MAX_OFFSET);
+  // calculate mouse position 
+  let targetOffsetX = map(mouseX, 0, width, -SHADOW_MAX_OFFSET, SHADOW_MAX_OFFSET); 
+  let targetOffsetY = map(mouseY, 0, height, -SHADOW_MAX_OFFSET, SHADOW_MAX_OFFSET);
 
-// smoothly transition https://p5js.org/reference/p5/lerp/
-currentShadowOffsetX = lerp(currentShadowOffsetX, targetOffsetX, SHADOW_SMOOTHING);
-currentShadowOffsetY = lerp(currentShadowOffsetY, targetOffsetY, SHADOW_SMOOTHING);
+  // smoothly transition https://p5js.org/reference/p5/lerp/
+  currentShadowOffsetX = lerp(currentShadowOffsetX, targetOffsetX, SHADOW_SMOOTHING);
+  currentShadowOffsetY = lerp(currentShadowOffsetY, targetOffsetY, SHADOW_SMOOTHING);
 
-// pass offsets to the background function
-drawBackground(currentShadowOffsetX, currentShadowOffsetY); 
+  // pass offsets to the background function
+  drawBackground(currentShadowOffsetX, currentShadowOffsetY); 
 
-// display generated art
-if (ready) {
-  let t = (millis() - startTime) / 1000; //Calculate how many seconds have passed since the animation started.
+  // display generated art
+  if (ready) {
+    let t = (millis() - startTime) / 1000; //Calculate how many seconds have passed since the animation started.
     renderScene(t);
- image(artCanvas, 656, 152, 600, 600);
- }
- pop();
+    image(artCanvas, 656, 152, 600, 600);
+  }
+  pop();
 }
 
 // Click to regenerate artwork
@@ -174,11 +185,14 @@ function mousePressed() {
   generateArt();
   extractDayRoadCells();
   createCarLights();  
+
+  initBigBlocks();
+  setupBigBlocksAnimation(); 
+
   startTime = millis();
 }
 
-// Daytime → Gradually darkening → Gradually revealing yellow roads
-
+// Daytime → Gradually darkening → Gradually revealing yellow roads → car lights → big blocks
 
 function renderScene(t) {
 
@@ -195,7 +209,8 @@ function renderScene(t) {
     let p = map(t, fadeStart, fadeEnd, 0, 1); //Calculate the transparency of black (from transparent to completely black). 
     let eased = p * p * (3 - 2 * p); //Make the transition more natural and less abrupt.          
     let alpha = eased * 255;                  
-// Draw a black rectangle with gradually increasing transparency on the artCanvas.
+
+    // Draw a black rectangle with gradually increasing transparency on the artCanvas.
     artCanvas.fill(0, alpha);
     artCanvas.noStroke();
     artCanvas.rect(0, 0, artCanvas.width, artCanvas.height);
@@ -205,9 +220,10 @@ function renderScene(t) {
 
       let rp = map(t, roadStart, roadEnd, 0, 1);
       rp = constrain(rp, 0, 1);
-// Draw the road line by line (from top to bottom).
-      let maxRow = maxRoadRowIndex(); //Maximum number of lanes on a road (Y direction)
-      let limit = floor(maxRow * rp); //The current number of rows to be drawn
+
+      // Draw the road line by line (from top to bottom).
+      let maxRow = maxRoadRowIndex(); // Maximum number of lanes on a road (Y direction)
+      let limit = floor(maxRow * rp); // The current number of rows to be drawn
 
       for (let cell of roadCells) {
         if (cell.row <= limit) {
@@ -222,15 +238,50 @@ function renderScene(t) {
   // After it goes completely black (the screen remains black).
   artCanvas.background(0);
 
-  // Yellow roads were paved
+  // During the night phase, draw the "large color blocks" (city buildings) first, but the large color blocks have an appearance time and change color every 5 seconds
+  for (let block of bigBlocks) {
+
+    //It's not the time for this square to appear yet. Skip it
+    if (t < block.appearTime) continue;
+
+    // When it's time for the color change, update it multiple times at 5-second intervals
+    while (t >= block.nextColorChange) {
+      let newColor = block.currentColor;
+
+      // Randomly find a color that is different from the current one
+      for (let k = 0; k < 5; k++) {
+        let candidate = random(BIGBLOCK_COLORS);
+        if (candidate !== block.currentColor) {
+          newColor = candidate;
+          break;
+        }
+      }
+
+      block.currentColor = newColor;
+      block.nextColorChange += BIGBLOCK_COLOR_CHANGE_INTERVAL; // The time for the next color change +5 seconds
+    }
+
+    // Draw big block
+    feltifyRect(
+      artCanvas,
+      block.x,
+      block.y,
+      block.w,
+      block.h,
+      block.currentColor,
+      6
+    );
+  }
+
+  // Yellow roads were paved（
   for (let cell of roadCells) {
     feltifyRect(artCanvas, cell.x, cell.y, cell.w, cell.h, colors.yellow, 1.2);
   }
 
- // Headlight movement + drawing (appearing at night)
+  // Headlight movement + drawing (appearing at night)
   for (let car of carLights) {
-    car.update();      //Mobile car lamp
-    car.draw(artCanvas); // Draw car lights
+    car.update(); // Mobile car
+    car.draw(artCanvas);
   }
 }
 
@@ -271,6 +322,7 @@ function extractDayRoadCells() {
     }
   }
 }
+
 // Calculate the maximum row value of the road
 function maxRoadRowIndex() {
   let m = 0;
@@ -297,6 +349,70 @@ let colors = {
   bg: '#EBEAE6'
 };
 
+// Initialize the position and base color of bigBlocks
+function initBigBlocks() {
+  bigBlocks = [];
+
+  const s = 1600 / 600; // Because the original coordinates are 1600x1600, they need to be scaled to 600x600
+
+  function addBlock(x, y, w, h, c) {
+    bigBlocks.push({
+      x: Math.round(x / s),
+      y: Math.round(y / s),
+      w: Math.round(w / s),
+      h: Math.round(h / s),
+      baseColor: c, // Initial color (for daytime use)
+      currentColor: c, // Current display color (changes at night)
+      appearTime: 0, // The appearance time of this square at night (in seconds)
+      nextColorChange: 0 // Time for the next color change (in seconds)
+    });
+  }
+
+  // It's the same as in drawSVGBlocks, except that here it's "data" and there it's "daytime drawing".
+  addBlock(910, 305, 275, 420, '#4267ba');
+  addBlock(910, 390, 275, 230, '#ad372b');
+  addBlock(960, 450, 160, 100, '#e1c927');
+  addBlock(80, 1160, 160, 140, '#e1c927');
+  addBlock(230, 960, 150, 130, "#4267ba");
+  addBlock(1450, 1450, 165, 165, '#e1c927');
+  addBlock(730, 280, 95, 95, '#e1c927');
+  addBlock(385, 1300, 195, 310, '#ad372b');
+  addBlock(450, 1360, 60, 60, '#d6d7d2');
+  addBlock(1005, 1060, 175, 390, "#4267ba");
+  addBlock(1025, 1295, 125, 100, '#e1c927');
+  addBlock(150, 455, 225, 120, "#4267ba");
+  addBlock(280, 160, 205, 85, '#ad372b');
+  addBlock(1380, 70, 180, 120, "#4267ba");
+  addBlock(1400, 625, 210, 210, '#ad372b');
+  addBlock(1270, 865, 130, 190, '#e1c927');
+  addBlock(610, 945, 215, 215, '#e1c927');
+  addBlock(385, 740, 220, 90, '#ad372b');
+  addBlock(830, 730, 155, 155, '#ad372b');
+  addBlock(1470, 700, 80, 60, '#d6d7d2');
+  addBlock(280, 1000, 50, 50, '#d6d7d2');
+  addBlock(670, 1020, 80, 80, '#d6d7d2');
+  addBlock(340, 160, 40, 85, '#d6d7d2');
+  addBlock(1295, 915, 75, 75, '#d6d7d2');
+  addBlock(750, 305, 45, 45, '#d6d7d2');
+}
+
+// Assign the appearance time and the next color change time to each large color block
+function setupBigBlocksAnimation() {
+  let fadeEnd = showDelay + fadeDuration; 
+
+  bigBlocks.forEach(block => {
+    // Appearance time: Within 0 to 10 seconds randomly after the headlights start
+    block.appearTime = fadeEnd + BIGBLOCK_DELAY_AFTER_CAR + random(0, BIGBLOCK_APPEAR_WINDOW);
+
+    // Initial color = daytime color
+    block.currentColor = block.baseColor;
+
+    // The first color change time = the appearance time + 5 seconds
+    block.nextColorChange = block.appearTime + BIGBLOCK_COLOR_CHANGE_INTERVAL;
+  });
+}
+
+
 function generateArt() {
   // setup artCanvas 
   artCanvas.push();
@@ -304,7 +420,7 @@ function generateArt() {
   artCanvas.background(colors.bg);
   artCanvas.noStroke();
 
-    // First draw the large square layer
+  // First draw the large square layer
   drawSVGBlocks();
 
   // Then draw the road sampling layer.
@@ -344,12 +460,12 @@ function generateArt() {
   for (let y = 0, row = 0; y < sourceImage.height; y += SAMPLE_STEP, row++) {
     for (let x = 0, col = 0; x < sourceImage.width; x += SAMPLE_STEP, col++) {
       if (grid[row][col]) {
-      const bx = x * scaleX;
-      const by = y * scaleY;
-      const bw = blockSize;
-      const bh = blockSize;
-      feltifyRect(artCanvas, bx, by, bw, bh, grid[row][col], 1.2);
-    }
+        const bx = x * scaleX;
+        const by = y * scaleY;
+        const bw = blockSize;
+        const bh = blockSize;
+        feltifyRect(artCanvas, bx, by, bw, bh, grid[row][col], 1.2);
+      }
     }
   }
   
@@ -364,17 +480,17 @@ function drawSVGBlocks() {
   const s = 1600 / 600; //cal canvas scale
 
   function R(x, y, w, h, c) {
-  // ampScale = 0.6 for smoother edge // update：change to 6, since they are much bigger than the small ones.
-  feltifyRect(
-    g,
-    Math.round(x / s),
-    Math.round(y / s),
-    Math.round(w / s),
-    Math.round(h / s),
-    c,
-    6
-  );
-}
+    // ampScale = 0.6 for smoother edge // update：change to 6, since they are much bigger than the small ones.
+    feltifyRect(
+      g,
+      Math.round(x / s),
+      Math.round(y / s),
+      Math.round(w / s),
+      Math.round(h / s),
+      c,
+      6
+    );
+  }
 
   R(910, 305, 275, 420, '#4267ba');
   R(910, 390, 275, 230, '#ad372b');
@@ -453,44 +569,45 @@ function chooseColor(grid, row, col) {
 
 // Background space drawing function
 function drawBackground(shadowOffsetX = 0, shadowOffsetY = 0) {
- noStroke();
+  noStroke();
 
- // wall
- fill('#F5F4F0');
- rect(0, 2, 1920, 910);
+  // wall
+  fill('#F5F4F0');
+  rect(0, 2, 1920, 910);
 
- // floor line
- fill('#6C4D38');
- rect(0, 868, 1920, 8);
+  // floor line
+  fill('#6C4D38');
+  rect(0, 868, 1920, 8);
 
- // floor strips
- fill('#A88974');
- rect(0, 875, 1920, 8);
- fill('#DBBDA5');
- rect(0, 883, 1920, 12);
- fill('#CEB1A1');
- rect(0, 895, 1920, 20);
- fill('#DDC3AC');
- rect(0, 915, 1920, 30);
- fill('#DDBFA7');
- rect(0, 945, 1920, 40);
- fill('#E4C9B4');
- rect(0, 985, 1920, 50);
+  // floor strips
+  fill('#A88974');
+  rect(0, 875, 1920, 8);
+  fill('#DBBDA5');
+  rect(0, 883, 1920, 12);
+  fill('#CEB1A1');
+  rect(0, 895, 1920, 20);
+  fill('#DDC3AC');
+  rect(0, 915, 1920, 30);
+  fill('#DDBFA7');
+  rect(0, 945, 1920, 40);
+  fill('#E4C9B4');
+  rect(0, 985, 1920, 50);
 
- // layered rectangles to create a shadow effect
- 
- fill('#A88974'); // deepest shadow (move)
- rect(630 + shadowOffsetX * 0.6, 132 + shadowOffsetY * 0.6, 670, 677);
- 
- fill('#E1E0DC'); // light edge of the frame
- rect(620, 120, 666, 664); 
+  // layered rectangles to create a shadow effect
+  
+  fill('#A88974'); // deepest shadow (move)
+  rect(630 + shadowOffsetX * 0.6, 132 + shadowOffsetY * 0.6, 670, 677);
+  
+  fill('#E1E0DC'); // light edge of the frame
+  rect(620, 120, 666, 664); 
 
- fill('#BFA89A'); // frame border (move)
- rect(658 + shadowOffsetX * 0.2, 153 + shadowOffsetY * 0.1, 606, 622); 
+  fill('#BFA89A'); // frame border (move)
+  rect(658 + shadowOffsetX * 0.2, 153 + shadowOffsetY * 0.1, 606, 622); 
 
- fill('#A88974'); // shadow at the bottom of the frame (move)
- rect(658 + shadowOffsetX * 0.1, 153 + shadowOffsetY * 0.1, 604, 612);
+  fill('#A88974'); // shadow at the bottom of the frame (move)
+  rect(658 + shadowOffsetX * 0.1, 153 + shadowOffsetY * 0.1, 604, 612);
 }
+
 // Hand-drawn style in visuals
 function feltifyRect(g, x, y, w, h, c, ampScale = 1) {
   
@@ -548,6 +665,7 @@ function feltifyRect(g, x, y, w, h, c, ampScale = 1) {
   g.noFill();
   g.rect(x, y, w, h);
 }
+
 function scaleToWindow() {
   let scaleX = windowWidth / baseWidth;
   let scaleY = windowHeight / baseHeight;
@@ -560,6 +678,7 @@ function scaleToWindow() {
   canvasElement.style.transformOrigin = "center center";
   canvasElement.style.transform = `translate(-50%, -50%) scale(${scale})`;
 }
+
 function windowResized() {
   scaleToWindow();
 }
