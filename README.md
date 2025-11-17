@@ -42,11 +42,3 @@ The car light system is built using JavaScript’s class mechanism. Each car lig
 **4. Big Blocks Animation: Nighttime Lighting System for Buildings**
 
 The large block animation is an independent feature I developed outside the group code. I added four fields to each block — baseColor, currentColor, appearTime, and nextColorChange — giving each block its own “independent life.” The appearance time of large blocks is designed to be staggered; they appear randomly within 10 seconds after fadeEnd (the moment the scene becomes fully dark). In addition, I implemented a time-loop–based automatic color-changing system: every 5 seconds, each block executes a randomized color change.
-
-## Note on coding Differences (Personal Code vs Group Code)
-
-In this project, my animation version differs from the group’s final submitted code in several places, with the most significant difference being the window scaling (responsive scaling) implementation. On the final day of submission, the group decided to revise the main code structure, but my individual extensions — including the time-based animation system, night-scene logic, car-light movement, and several detailed visual functions — were all developed on top of the original architecture.
-
-Because of the tight deadline and the complexity of these dependent features, it was not feasible to completely migrate my version to the updated group code. As a result, I kept the original scaling logic and a few other small functional differences.
-
-These differences do not affect the presentation or functionality of my animation. However, it means that the window-scaling system shown in my README is intentionally slightly different from the group’s final version.

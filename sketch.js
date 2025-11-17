@@ -2,8 +2,9 @@ let sourceImage;
 let artCanvas; // define artCanvas
 let ready = false; // track if art is ready
 
-const baseWidth = 1920;// base canvas width
-const baseHeight = 1080;// base canvas height
+// Fixed design space (virtual gallery wall)
+const DESIGN_W = 1920; // design width
+const DESIGN_H = 1080; // design height
 
 //  sampling parameters to control the size and ignore the imperfection of the map image
 const SAMPLE_STEP = 25;
@@ -125,7 +126,8 @@ function preload() {
 }
 
 function setup() {
-  createCanvas(baseWidth, baseHeight); // create main canvas
+  // canvas size follows the window; we will draw a fixed 1920x1080 "wall" inside it
+  createCanvas(windowWidth, windowHeight); 
   pixelDensity(1);
 
   //Content outside the element box is not shown https://www.w3schools.com/jsref/prop_style_overflow.asp
@@ -145,22 +147,32 @@ function setup() {
 
   startTime = millis(); 
   ready = true;
-  scaleToWindow();// scale to window size
 }
 
 
 function draw() {
+  // 1) Responsive scaling:
+  //    We treat 1920x1080 as our design space (gallery wall),
+  //    then scale and center this space into the real window.
+  const s = Math.max(width / DESIGN_W, height / DESIGN_H);
+  const offsetX = (width - DESIGN_W * s) / 2;
+  const offsetY = (height - DESIGN_H * s) / 2;
 
-  // resizing and fitting
   background(255);
-  let zoom = 1.25;
-  let zoomAnchorY = height * 0.75;
-  push(); 
-  translate(width / 2, zoomAnchorY / 2); 
-  scale(zoom); 
-  translate(-width / 2, -zoomAnchorY / 2); 
 
-  // calculate mouse position 
+  push();
+  translate(offsetX, offsetY);
+  scale(s);
+
+  // 2) Camera zoom inside the design space (since the original one is too small)
+  let zoom = 1.25;
+  let zoomAnchorY = DESIGN_H * 0.75;
+  push(); 
+  translate(DESIGN_W / 2, zoomAnchorY / 2); 
+  scale(zoom); 
+  translate(-DESIGN_W / 2, -zoomAnchorY / 2); 
+
+  // calculate mouse position (still using real window size for input)
   let targetOffsetX = map(mouseX, 0, width, -SHADOW_MAX_OFFSET, SHADOW_MAX_OFFSET); 
   let targetOffsetY = map(mouseY, 0, height, -SHADOW_MAX_OFFSET, SHADOW_MAX_OFFSET);
 
@@ -174,11 +186,12 @@ function draw() {
   // display generated art
   if (ready) {
     let t = (millis() - startTime) / 1000; //Calculate how many seconds have passed since the animation started. https://p5js.org/reference/p5/millis/
-
     renderScene(t);
     image(artCanvas, 656, 152, 600, 600);
   }
-  pop();
+
+  pop(); // end zoom
+  pop(); // end responsive scaling
 }
 
 // Click to regenerate artwork
@@ -194,7 +207,6 @@ function mousePressed() {
 }
 
 // Daytime → Gradually darkening → Gradually revealing yellow roads → car lights → big blocks
-
 function renderScene(t) {
 
   if (t < showDelay) return; // Do nothing for the first 3 seconds (showing daytime footage).
@@ -274,7 +286,7 @@ function renderScene(t) {
     );
   }
 
-  // Yellow roads were paved（
+  // Yellow roads were paved
   for (let cell of roadCells) {
     feltifyRect(artCanvas, cell.x, cell.y, cell.w, cell.h, colors.yellow, 1.2);
   }
@@ -574,28 +586,27 @@ function drawBackground(shadowOffsetX = 0, shadowOffsetY = 0) {
 
   // wall
   fill('#F5F4F0');
-  rect(0, 2, 1920, 910);
+  rect(0, 2, DESIGN_W, 910);
 
   // floor line
   fill('#6C4D38');
-  rect(0, 868, 1920, 8);
+  rect(0, 868, DESIGN_W, 8);
 
   // floor strips
   fill('#A88974');
-  rect(0, 875, 1920, 8);
+  rect(0, 875, DESIGN_W, 8);
   fill('#DBBDA5');
-  rect(0, 883, 1920, 12);
+  rect(0, 883, DESIGN_W, 12);
   fill('#CEB1A1');
-  rect(0, 895, 1920, 20);
+  rect(0, 895, DESIGN_W, 20);
   fill('#DDC3AC');
-  rect(0, 915, 1920, 30);
+  rect(0, 915, DESIGN_W, 30);
   fill('#DDBFA7');
-  rect(0, 945, 1920, 40);
+  rect(0, 945, DESIGN_W, 40);
   fill('#E4C9B4');
-  rect(0, 985, 1920, 50);
+  rect(0, 985, DESIGN_W, 50);
 
   // layered rectangles to create a shadow effect
-  
   fill('#A88974'); // deepest shadow (move)
   rect(630 + shadowOffsetX * 0.6, 132 + shadowOffsetY * 0.6, 670, 677);
   
@@ -667,19 +678,7 @@ function feltifyRect(g, x, y, w, h, c, ampScale = 1) {
   g.rect(x, y, w, h);
 }
 
-function scaleToWindow() {
-  let scaleX = windowWidth / baseWidth;
-  let scaleY = windowHeight / baseHeight;
-  let scale = Math.max(scaleX, scaleY);
-  
-  let canvasElement = document.querySelector('canvas');
-  canvasElement.style.position = "absolute";
-  canvasElement.style.left = "50%";
-  canvasElement.style.top = "50%";
-  canvasElement.style.transformOrigin = "center center";
-  canvasElement.style.transform = `translate(-50%, -50%) scale(${scale})`;
-}
-
+// When the window size changes, resize the canvas and keep using the same design space
 function windowResized() {
-  scaleToWindow();
+  resizeCanvas(windowWidth, windowHeight);
 }
